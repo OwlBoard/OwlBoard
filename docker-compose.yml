@@ -48,6 +48,29 @@ services:
     environment:
       DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
 
+  frontend:
+    build: 
+      context: ./Desktop_Front_End
+      target: development
+    container_name: Frontend
+    restart: always
+    depends_on:
+      - user_service
+      - comments_service
+    ports:
+      - "3000:3000"  # Frontend accessible on localhost:3000
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_USER_SERVICE_URL=http://localhost:5000
+      - REACT_APP_COMMENTS_SERVICE_URL=http://localhost:8001
+      - WATCHPACK_POLLING=true
+      - FAST_REFRESH=true
+    volumes:
+      - ./Desktop_Front_End:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
 volumes:
   mongo_data:
   mysql_data:
