@@ -22,10 +22,34 @@ This is the main repository that orchestrates the entire OwlBoard ecosystem. Bel
 
 ## Getting Started
 
-This main repository contains the Docker Compose configuration to run the entire OwlBoard system. To get started:
+This main repository contains the Docker Compose configuration to run the entire OwlBoard system. All required repositories are included as Git submodules for easy setup.
 
-1. Clone this repository and the required service repositories
-2. Run `docker-compose up` to start all services
-3. Access the application through the configured ports
+### Initial Setup
+
+1. Clone this repository with submodules:
+   ```bash
+   git clone --recursive https://github.com/OwlBoard/OwlBoard.git
+   ```
+
+   Or if you already cloned the repository, initialize the submodules:
+   ```bash
+   git submodule update --init --recursive
+   ```
+
+2. Start all services using Docker Compose:
+   ```bash
+   docker compose up
+   ```
+
+3. Access the application through the configured ports:
+   - User Service: `localhost:5000`
+   - Comments Service: `localhost:8001`
+
+### Updating Submodules
+
+To update all submodules to their latest versions:
+```bash
+git submodule update --remote --recursive
+```
 
 For more detailed information about each component, please visit the individual repository links above.
