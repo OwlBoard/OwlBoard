@@ -7,15 +7,3 @@
 [submodule "Desktop_Front_End"]
 	path = Desktop_Front_End
 	url = https://github.com/OwlBoard/Desktop_Front_End.git
-[submodule "Canvas_Service"]
-	path = Canvas_Service
-	url = https://github.com/OwlBoard/Canvas_Service.git
-[submodule "Comments_Service_Database"]
-	path = Comments_Service_Database
-	url = https://github.com/OwlBoard/Comments_Service_Database.git
-[submodule "Templates"]
-	path = Templates
-	url = https://github.com/OwlBoard/Templates.git
-[submodule "User_Service_Database"]
-	path = User_Service_Database
-	url = https://github.com/OwlBoard/User_Service_Database.git
