@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  mysql_db:
+    image: mysql:8
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: user_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  user_service:
+    build: ./User_Service
+    container_name: user_service
+    restart: always
+    depends_on:
+      - mysql_db
+    ports:
+      - "5000:8000"  # accedes con localhost:5000
+    environment:
+      DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
+  mongo_db:
+    image: mongo:6
+    container_name: mongo_db
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: user
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27018:27017" # Puerto 27018
+    volumes:
+      - mongo_data:/data/db
+
+  comments_service:
+    build: ./Comments_Service
+    container_name: comments_service
+    restart: always
+    depends_on:
+      - mongo_db
+    ports:
+      - "8001:8000"  # Accedes con localhost:8001 (changed to avoid port conflict)
+    environment:
+      DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
+
+  frontend:
+    build: 
+      context: ./Desktop_Front_End
+      target: development
+    container_name: Frontend
+    restart: always
+    depends_on:
+      - user_service
+      - comments_service
+    ports:
+      - "3000:3000"  # Frontend accessible on localhost:3000
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_USER_SERVICE_URL=http://localhost:5000
+      - REACT_APP_COMMENTS_SERVICE_URL=http://localhost:8001
+      - WATCHPACK_POLLING=true
+      - FAST_REFRESH=true
+    volumes:
+      - ./Desktop_Front_End:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+volumes:
+  mongo_data:
+  mysql_data:
