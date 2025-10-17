@@ -7,18 +7,12 @@ This is the main repository that orchestrates the entire OwlBoard ecosystem. Bel
 
 ### 🖥️ Frontend
 - **[Desktop_Front_End](https://github.com/OwlBoard/Desktop_Front_End)** - Repository for the web front end (JavaScript)
+- **[Mobile_Front_End](https://github.com/OwlBoard/Mobile_Front_End)** - Repository for the mobile front end (Dart)
 
 ### ⚙️ Services
 - **[User_Service](https://github.com/OwlBoard/User_Service)** - User management service (Python)
 - **[Canvas_Service](https://github.com/OwlBoard/Canvas_Service)** - Canvas/whiteboard service (Dockerfile)
 - **[Comments_Service](https://github.com/OwlBoard/Comments_Service)** - Comments and collaboration service (Dockerfile)
-
-### 🗄️ Databases
-- **[User_Service_Database](https://github.com/OwlBoard/User_Service_Database)** - Relational database for the User Service
-- **[Comments_Service_Database](https://github.com/OwlBoard/Comments_Service_Database)** - Non-Relational database for the user comments service
-
-### 📝 Templates & Resources
-- **[Templates](https://github.com/OwlBoard/Templates)** - Templates repository
 
 ## Getting Started
 
