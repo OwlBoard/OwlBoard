@@ -71,6 +71,27 @@ services:
     stdin_open: true
     tty: true
 
+  mobile_frontend:
+    build:
+      context: ./Mobile_Front_End
+      dockerfile: Dockerfile
+    container_name: mobile_frontend
+    restart: always
+    depends_on:
+      - user_service
+      - comments_service
+    ports:
+      - "3001:80"  # Mobile frontend accessible on localhost:3001 (avoiding port 3000 conflict)
+    environment:
+      - USER_SERVICE_URL=http://user_service:8000
+      - COMMENTS_SERVICE_URL=http://comments_service:8000
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 volumes:
   mongo_data:
   mysql_data:
