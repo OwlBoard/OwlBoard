@@ -7,3 +7,6 @@
 [submodule "Desktop_Front_End"]
 	path = Desktop_Front_End
 	url = https://github.com/OwlBoard/Desktop_Front_End.git
+[submodule "Mobile_Front_End"]
+	path = Mobile_Front_End
+	url = https://github.com/OwlBoard/Mobile_Front_End.git
