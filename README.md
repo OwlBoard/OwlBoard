@@ -25,7 +25,7 @@ This main repository contains the Docker Compose configuration to run the entire
    git clone --recursive https://github.com/OwlBoard/OwlBoard.git
    ```
 
-   Or if you already cloned the repository, initialize the submodules:
+   If you already cloned the repository, go to the cloned folder and initialize the submodules:
    ```bash
    git submodule update --init --recursive
    ```
