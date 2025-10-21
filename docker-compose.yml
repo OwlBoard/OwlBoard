@@ -23,6 +23,18 @@ services:
       - "5000:8000"  # accedes con localhost:5000
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/%2F"
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672" 
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
 
   mongo_db:
     image: mongo:6
@@ -78,6 +90,7 @@ services:
     depends_on:
       - user_service
       - comments_service
+      - canvas_service
       - chat_service
     ports:
       - "3000:3000"  # Frontend accessible on localhost:3000
@@ -94,7 +107,7 @@ services:
     stdin_open: true
     tty: true
 
-    mobile_frontend:
+  mobile_frontend:
     build:
       context: ./Mobile_Front_End
       dockerfile: Dockerfile
@@ -114,8 +127,36 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-      
+
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: canvas_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./Canvas_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+  
+  canvas_service:
+    build: ./Canvas_Service
+    container_name: canvas_service
+    restart: always
+    depends_on:
+      - postgres_db
+      - rabbitmq
+    ports:
+      - "8002:8080" 
+    environment:
+      DATABASE_URL: "postgres://admin:admin@postgres_db:5432/canvas_db?sslmode=disable"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+
 volumes:
   mongo_data:
   mysql_data:
+  postgres_data:
   redis_data:
