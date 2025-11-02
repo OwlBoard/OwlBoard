@@ -10,3 +10,12 @@
 [submodule "Mobile_Front_End"]
 	path = Mobile_Front_End
 	url = https://github.com/OwlBoard/Mobile_Front_End.git
+[submodule "Canvas_Service"]
+	path = Canvas_Service
+	url = https://github.com/OwlBoard/Canvas_Service.git
+[submodule "Chat_Service"]
+	path = Chat_Service
+	url = https://github.com/OwlBoard/Chat_Service.git
+[submodule "owlboard-orchestrator"]
+	path = owlboard-orchestrator
+	url = https://github.com/OwlBoard/owlboard-orchestrator.git
