@@ -1,4 +1,19 @@
 services:
+
+  api_gateway:
+    build: ./owlboard-orchestrator
+    container_name: api_gateway
+    restart: always
+    ports:
+      - "8000:80"  # Nginx listens on 80, expose as 8000
+    depends_on:
+      - user_service
+      - comments_service
+      - chat_service
+      - canvas_service
+    networks:
+      - owlboard-network
+
   mysql_db:
     image: mysql:8
     container_name: mysql_db
@@ -12,30 +27,94 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - owlboard-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - owlboard-network
+
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: canvas_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./Canvas_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d canvas_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - owlboard-network
 
   user_service:
     build: ./User_Service
     container_name: user_service
     restart: always
     depends_on:
-      - mysql_db
+      mysql_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "5000:8000"  # accedes con localhost:5000
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
-      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/%2F"
-
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: rabbitmq
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+    networks:
+      - owlboard-network
+  
+  canvas_service:
+    build:
+      context: ./Canvas_Service
+      cache_from:
+        - canvas_service:latest
+    container_name: canvas_service
     restart: always
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
-      - "5672:5672"
-      - "15672:15672" 
+      - "8080:8080"  # Canvas service accessible on localhost:8080
     environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-
+      DATABASE_URL: "postgres://admin:admin@postgres_db:5432/canvas_db?sslmode=disable"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+    networks:
+      - owlboard-network
+  
   mongo_db:
     image: mongo:6
     container_name: mongo_db
@@ -47,6 +126,28 @@ services:
       - "27018:27017" # Puerto 27018
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - owlboard-network
+
+  comments_service:
+    build: ./Comments_Service
+    container_name: comments_service
+    restart: always
+    depends_on:
+      mongo_db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"  # Accedes con localhost:8001 (changed to avoid port conflict)
+    environment:
+      DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
+    networks:
+      - owlboard-network
 
   redis_db:
     image: redis:7-alpine
@@ -54,109 +155,87 @@ services:
     restart: always
     command: redis-server --requirepass password
     ports:
-      - "6379:6379" # Puerto Redis
+      - "6379:6379"
     volumes:
       - redis_data:/data
-
-  comments_service:
-    build: ./Comments_Service
-    container_name: comments_service
-    restart: always
-    depends_on:
-      - mongo_db
-    ports:
-      - "8001:8000"  # Accedes con localhost:8001 (changed to avoid port conflict)
-    environment:
-      DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - owlboard-network
 
   chat_service:
     build: ./Chat_Service
     container_name: chat_service
     restart: always
     depends_on:
-      - redis_db
+      redis_db:
+        condition: service_healthy
     ports:
       - "8002:8000"  # Chat service accessible on localhost:8002
     environment:
       REDIS_URL: "redis://:password@redis_db:6379/0"
-      CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3001"]'
-
-  frontend:
-    build: 
-      context: ./Desktop_Front_End
-      target: development
-    container_name: Frontend
-    restart: always
-    depends_on:
-      - user_service
-      - comments_service
-      - canvas_service
-      - chat_service
-    ports:
-      - "3000:3000"  # Frontend accessible on localhost:3000
-    environment:
-      - NODE_ENV=development
-      - REACT_APP_USER_SERVICE_URL=http://localhost:5000
-      - REACT_APP_COMMENTS_SERVICE_URL=http://localhost:8001
-      - REACT_APP_CHAT_SERVICE_URL=http://localhost:8002
-      - WATCHPACK_POLLING=true
-      - FAST_REFRESH=true
-    volumes:
-      - ./Desktop_Front_End:/app
-      - /app/node_modules
-    stdin_open: true
-    tty: true
+      CORS_ORIGINS: '["http://localhost:3001", "http://localhost:3002"]'
+    networks:
+      - owlboard-network
 
   mobile_frontend:
-    build:
-      context: ./Mobile_Front_End
-      dockerfile: Dockerfile
-    container_name: mobile_frontend
-    restart: always
-    depends_on:
-      - user_service
-      - comments_service
-    ports:
-      - "3001:80"  # Mobile frontend accessible on localhost:3001 (avoiding port 3000 conflict)
-    environment:
-      - USER_SERVICE_URL=http://user_service:8000
-      - COMMENTS_SERVICE_URL=http://comments_service:8000
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+     build:
+       context: ./Mobile_Front_End
+       dockerfile: Dockerfile
+     container_name: mobile_frontend
+     restart: always
+     depends_on:
+       - user_service
+       - comments_service
+     ports:
+       - "3001:80"
+     environment:
+       - USER_SERVICE_URL=http://user_service:8000
+       - COMMENTS_SERVICE_URL=http://comments_service:8000
+     networks:
+       - owlboard-network
 
-  postgres_db:
-    image: postgres:16-alpine
-    container_name: postgres_db
-    restart: always
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: canvas_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./Canvas_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - postgres_data:/var/lib/postgresql/data
-  
-  canvas_service:
-    build: ./Canvas_Service
-    container_name: canvas_service
+  nextjs_frontend:
+    build:
+      context: ./Desktop_Front_End
+      dockerfile: Dockerfile
+      cache_from:
+        - nextjs_frontend:latest
+    container_name: nextjs_frontend
     restart: always
     depends_on:
-      - postgres_db
-      - rabbitmq
+      - api_gateway
     ports:
-      - "8002:8080" 
+      - "3002:3000"  # Next.js frontend accessible on localhost:3002
     environment:
-      DATABASE_URL: "postgres://admin:admin@postgres_db:5432/canvas_db?sslmode=disable"
-      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      - NODE_ENV=production
+      # Client-side API URLs (through API Gateway)
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api/users
+      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api/comments
+      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api/chat
+      - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api/canvas
+      # Server-side API URLs (through API Gateway - internal network)
+      - API_URL=http://api_gateway/api
+      - USER_SERVICE_URL=http://api_gateway/api/users
+      - COMMENTS_SERVICE_URL=http://api_gateway/api/comments
+      - CHAT_SERVICE_URL=http://api_gateway/api/chat
+      - CANVAS_SERVICE_URL=http://api_gateway/api/canvas
+    networks:
+      - owlboard-network
 
 volumes:
   mongo_data:
   mysql_data:
-  postgres_data:
   redis_data:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  owlboard-network:
+    driver: bridge
+
