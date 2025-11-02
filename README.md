@@ -13,6 +13,8 @@ This is the main repository that orchestrates the entire OwlBoard ecosystem. Bel
 - **[User_Service](https://github.com/OwlBoard/User_Service)** - User management service (Python)
 - **[Canvas_Service](https://github.com/OwlBoard/Canvas_Service)** - Canvas/whiteboard service (Dockerfile)
 - **[Comments_Service](https://github.com/OwlBoard/Comments_Service)** - Comments and collaboration service (Dockerfile)
+- **[Chat_Service](https://github.com/OwlBoard/Chat_Service)** - Real-time chat service (Dockerfile)
+- **[owlboard-orchestrator](https://github.com/OwlBoard/owlboard-orchestrator)** - API Gateway and orchestration service (Nginx)
 
 ## Getting Started
 
@@ -44,4 +46,4 @@ This main repository contains the Docker Compose configuration to run the entire
     - Canvas Service: `localhost:8080/docs`
     - Desktop Frontend: `localhost:3002`
     - Mobile Frontend: `localhost:3001`
-    - API Gateway: `localhost:3000`
+    - API Gateway: `localhost:8000`
