@@ -189,13 +189,18 @@ services:
      container_name: mobile_frontend
      restart: always
      depends_on:
-       - user_service
-       - comments_service
+       - api_gateway
      ports:
        - "3001:80"
      environment:
-       - USER_SERVICE_URL=http://user_service:8000
-       - COMMENTS_SERVICE_URL=http://comments_service:8000
+       # Use API Gateway for all requests
+       - API_BASE_URL=http://api_gateway/api
+       - USER_SERVICE_URL=http://api_gateway/api/users
+       - COMMENTS_SERVICE_URL=http://api_gateway/api/comments
+       - CHAT_SERVICE_URL=http://api_gateway/api/chat
+       - CANVAS_SERVICE_URL=http://api_gateway/api/canvas
+       # External URLs (for devices outside Docker network)
+       - EXTERNAL_API_URL=http://localhost:8000/api
      networks:
        - owlboard-network
 
@@ -213,18 +218,18 @@ services:
       - "3002:3000"  # Next.js frontend accessible on localhost:3002
     environment:
       - NODE_ENV=production
-      # Client-side API URLs (through API Gateway)
+      # Client-side API URLs (through API Gateway) - for browser requests
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-      - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api/users
-      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api/comments
-      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api/chat
-      - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api/canvas
-      # Server-side API URLs (through API Gateway - internal network)
+      - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api
+      # Server-side API URLs (through API Gateway - internal network) - for SSR requests
       - API_URL=http://api_gateway/api
-      - USER_SERVICE_URL=http://api_gateway/api/users
-      - COMMENTS_SERVICE_URL=http://api_gateway/api/comments
-      - CHAT_SERVICE_URL=http://api_gateway/api/chat
-      - CANVAS_SERVICE_URL=http://api_gateway/api/canvas
+      - USER_SERVICE_URL=http://api_gateway/api
+      - COMMENTS_SERVICE_URL=http://api_gateway/api
+      - CHAT_SERVICE_URL=http://api_gateway/api
+      - CANVAS_SERVICE_URL=http://api_gateway/api
     networks:
       - owlboard-network
 

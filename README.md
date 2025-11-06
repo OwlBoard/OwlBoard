@@ -16,34 +16,67 @@ This is the main repository that orchestrates the entire OwlBoard ecosystem. Bel
 - **[Chat_Service](https://github.com/OwlBoard/Chat_Service)** - Real-time chat service (Dockerfile)
 - **[owlboard-orchestrator](https://github.com/OwlBoard/owlboard-orchestrator)** - API Gateway and orchestration service (Nginx)
 
-## Getting Started
+## 🚀 Quick Start
 
 This main repository contains the Docker Compose configuration to run the entire OwlBoard system. All required repositories are included as Git submodules for easy setup.
 
-## Instructions for deploying the system locally
+### Local Development Setup
 
-   
-1. Clone this repository with submodules:
+1. **Clone this repository with submodules:**
    ```bash
    git clone --recursive https://github.com/OwlBoard/OwlBoard.git
+   cd OwlBoard
    ```
 
-2. Update all submodules to their latest versions with:
+2. **Update all submodules to their latest versions (optional):**
    ```bash
    git submodule update --remote --recursive
    ```
-3. Start all services using Docker Compose:
+
+3. **Start all services using Docker Compose:**
    ```bash
    docker-compose up --build
    ```
 
-4. Access the application through the configured ports:
-   
-   
-    - User Service: `localhost:5000/docs`
-    - Comments Service: `localhost:8001/docs`
-    - Chat Service: `localhost:8002/docs`
-    - Canvas Service: `localhost:8080/docs`
-    - Desktop Frontend: `localhost:3002`
-    - Mobile Frontend: `localhost:3001`
-    - API Gateway: `localhost:8000`
+4. **Access the applications:**
+   - 🖥️ **Desktop Frontend**: http://localhost:3002
+   - 📱 **Mobile Frontend**: http://localhost:3001
+   - 🌐 **API Gateway**: http://localhost:8000
+
+5. **Service API Documentation:**
+   - User Service: http://localhost:5000/docs
+   - Comments Service: http://localhost:8001/docs
+   - Chat Service: http://localhost:8002/docs
+   - Canvas Service: http://localhost:8080 (Swagger docs if available)
+
+## 📚 Documentation
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Detailed deployment guide for local development and production
+- Port configuration and troubleshooting
+- Production deployment checklist
+- Security considerations
+
+## 🏗️ Architecture
+
+OwlBoard uses a microservices architecture with:
+- **API Gateway** (Nginx) - Routes all requests and handles CORS
+- **Backend Services** - Independent microservices for each feature
+- **Frontend Applications** - Separate web and mobile interfaces
+- **Databases** - MySQL, MongoDB, PostgreSQL, Redis for different services
+- **Message Queue** - RabbitMQ for async communication
+
+## 🐛 Troubleshooting
+
+If you encounter issues:
+1. Check all containers are running: `docker-compose ps`
+2. View service logs: `docker logs <service_name>`
+3. Ensure no port conflicts on your system
+4. See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed troubleshooting
+
+## 🤝 Contributing
+
+When contributing to submodules:
+1. Create a branch in the specific submodule repository
+2. Make your changes and push to the submodule repo
+3. Update the submodule reference in this main repository
+4. Follow Gitflow branching strategy (feature/, hotfix/, release/)
