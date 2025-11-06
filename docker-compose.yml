@@ -1,5 +1,25 @@
 services:
 
+  reverse_proxy:
+    build:
+      context: ./Reverse_Proxy
+      dockerfile: Dockerfile
+    container_name: reverse_proxy
+    restart: unless-stopped
+    ports:
+      - "9000:80"  # Reverse proxy exposed on port 9000 for mobile frontend
+    depends_on:
+      api_gateway:
+        condition: service_started
+    networks:
+      - owlboard-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
   api_gateway:
     build: ./owlboard-orchestrator
     container_name: api_gateway
@@ -189,13 +209,19 @@ services:
      container_name: mobile_frontend
      restart: always
      depends_on:
-       - user_service
-       - comments_service
+       - reverse_proxy
+       - api_gateway
      ports:
        - "3001:80"
      environment:
-       - USER_SERVICE_URL=http://user_service:8000
-       - COMMENTS_SERVICE_URL=http://comments_service:8000
+       # Use Reverse Proxy for enhanced security, rate limiting, and caching
+       - API_BASE_URL=http://reverse_proxy/api
+       - USER_SERVICE_URL=http://reverse_proxy/api/users
+       - COMMENTS_SERVICE_URL=http://reverse_proxy/api/comments
+       - CHAT_SERVICE_URL=http://reverse_proxy/api/chat
+       - CANVAS_SERVICE_URL=http://reverse_proxy/api/canvas
+       # External URLs (for devices outside Docker network)
+       - EXTERNAL_API_URL=http://localhost:9000/api
      networks:
        - owlboard-network
 
