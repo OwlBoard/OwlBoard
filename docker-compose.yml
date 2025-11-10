@@ -42,6 +42,9 @@ services:
       - ./Secure_Channel/certs/api_gateway/server.crt:/etc/ssl/certs/server.crt:ro
       - ./Secure_Channel/certs/api_gateway/server.key:/etc/ssl/private/server.key:ro
       - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      # Client certificates for mTLS
+      - ./Secure_Channel/certs/api_gateway/client.crt:/etc/ssl/certs/client.crt:ro
+      - ./Secure_Channel/certs/api_gateway/client.key:/etc/ssl/private/client.key:ro
     # ----------------------------
     networks:
       - owlboard-network
