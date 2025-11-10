@@ -1,16 +1,48 @@
 services:
 
+  reverse_proxy:
+    build:
+      context: ./Reverse_Proxy
+      dockerfile: Dockerfile
+    container_name: reverse_proxy
+    restart: unless-stopped
+    ports:
+      - "9000:80"  # Reverse proxy exposed on port 9000 for mobile frontend
+    depends_on:
+      api_gateway:
+        condition: service_started
+    # --- AÑADIR ESTA SECCIÓN ---
+    volumes:
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+    # ----------------------------
+    networks:
+      - owlboard-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
   api_gateway:
     build: ./owlboard-orchestrator
     container_name: api_gateway
     restart: always
     ports:
-      - "8000:80"  # Nginx listens on 80, expose as 8000
+      - "8000:80"   # HTTP port (redirects to HTTPS)
+      - "8443:443"  # HTTPS port (SSL)
     depends_on:
       - user_service
       - comments_service
       - chat_service
       - canvas_service
+
+    # --- AÑADIR ESTA SECCIÓN ---
+    volumes:
+      - ./Secure_Channel/certs/api_gateway/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/api_gateway/server.key:/etc/ssl/private/server.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+    # ----------------------------
     networks:
       - owlboard-network
 
@@ -27,6 +59,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./User_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql  # ← ADD THIS
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
       interval: 10s
@@ -88,10 +121,15 @@ services:
       rabbitmq:
         condition: service_healthy
     ports:
-      - "5000:8000"  # accedes con localhost:5000
+      - "5000:8443"  # accedes con localhost:5000
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+    # --- AÑADIR ESTA SECCIÓN ---
+    volumes:
+      - ./Secure_Channel/certs/user_service/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/user_service/server.key:/etc/ssl/private/server.key:ro
+    # ----------------------------
     networks:
       - owlboard-network
   
@@ -175,10 +213,15 @@ services:
       redis_db:
         condition: service_healthy
     ports:
-      - "8002:8000"  # Chat service accessible on localhost:8002
+      - "8002:8443"  # Chat service accessible on localhost:8002
     environment:
       REDIS_URL: "redis://:password@redis_db:6379/0"
       CORS_ORIGINS: '["http://localhost:3001", "http://localhost:3002"]'
+    # --- AÑADIR ESTA SECCIÓN ---
+    volumes:
+      - ./Secure_Channel/certs/chat_service/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/chat_service/server.key:/etc/ssl/private/server.key:ro
+    # ----------------------------
     networks:
       - owlboard-network
 
@@ -189,18 +232,19 @@ services:
      container_name: mobile_frontend
      restart: always
      depends_on:
+       - reverse_proxy
        - api_gateway
      ports:
        - "3001:80"
      environment:
-       # Use API Gateway for all requests
-       - API_BASE_URL=http://api_gateway/api
-       - USER_SERVICE_URL=http://api_gateway/api/users
-       - COMMENTS_SERVICE_URL=http://api_gateway/api/comments
-       - CHAT_SERVICE_URL=http://api_gateway/api/chat
-       - CANVAS_SERVICE_URL=http://api_gateway/api/canvas
+       # Use Reverse Proxy for enhanced security, rate limiting, and caching
+       - API_BASE_URL=http://reverse_proxy/api
+       - USER_SERVICE_URL=http://reverse_proxy/api/users
+       - COMMENTS_SERVICE_URL=http://reverse_proxy/api/comments
+       - CHAT_SERVICE_URL=http://reverse_proxy/api/chat
+       - CANVAS_SERVICE_URL=http://reverse_proxy/api/canvas
        # External URLs (for devices outside Docker network)
-       - EXTERNAL_API_URL=http://localhost:8000/api
+       - EXTERNAL_API_URL=http://localhost:9000/api
      networks:
        - owlboard-network
 
@@ -210,26 +254,38 @@ services:
       dockerfile: Dockerfile
       cache_from:
         - nextjs_frontend:latest
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+        NEXT_PUBLIC_USER_SERVICE_URL: http://localhost:8000/api/users
+        NEXT_PUBLIC_COMMENTS_SERVICE_URL: http://localhost:8000/api/comments
+        NEXT_PUBLIC_CHAT_SERVICE_URL: /api
+        NEXT_PUBLIC_CANVAS_SERVICE_URL: http://localhost:8000/api/canvas
     container_name: nextjs_frontend
     restart: always
     depends_on:
       - api_gateway
     ports:
       - "3002:3000"  # Next.js frontend accessible on localhost:3002
+    # --- ADD CERTIFICATE VOLUMES FOR SERVER-SIDE API CALLS ---
+    volumes:
+      - ./Secure_Channel/ca/ca.crt:/usr/local/share/ca-certificates/owlboard-ca.crt:ro
+    # ---------------------------------------------------------
     environment:
       - NODE_ENV=production
-      # Client-side API URLs (through API Gateway) - for browser requests
+      # Client-side API URLs (through API Gateway)
+      # For local development use HTTP to avoid TLS trust issues (or use HTTPS with a trusted CA)
+      # Browser can access the API Gateway over HTTP on port 8000 (redirects to container 80)
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-      - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api
-      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api
-      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api
-      - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api
-      # Server-side API URLs (through API Gateway - internal network) - for SSR requests
-      - API_URL=http://api_gateway/api
-      - USER_SERVICE_URL=http://api_gateway/api
-      - COMMENTS_SERVICE_URL=http://api_gateway/api
-      - CHAT_SERVICE_URL=http://api_gateway/api
-      - CANVAS_SERVICE_URL=http://api_gateway/api
+      - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api/users
+      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api/comments
+      - NEXT_PUBLIC_CHAT_SERVICE_URL=/api
+      - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api/canvas
+      # Server-side API URLs (through API Gateway - internal network)
+      - API_URL=https://api_gateway/api
+      - USER_SERVICE_URL=https://api_gateway/api/users
+      - COMMENTS_SERVICE_URL=https://api_gateway/api/comments
+      - CHAT_SERVICE_URL=https://api_gateway/api
+      - CANVAS_SERVICE_URL=https://api_gateway/api/canvas
     networks:
       - owlboard-network
 
@@ -243,4 +299,3 @@ volumes:
 networks:
   owlboard-network:
     driver: bridge
-
