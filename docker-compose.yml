@@ -11,14 +11,13 @@ services:
     depends_on:
       api_gateway:
         condition: service_started
-    # --- AÑADIR ESTA SECCIÓN ---
     volumes:
       - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
-    # ----------------------------
     networks:
-      - owlboard-network
+      - owlboard-public-network  # Public access for mobile frontend
+      - owlboard-private-network # Private network access to API gateway
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -29,15 +28,12 @@ services:
     container_name: api_gateway
     restart: always
     ports:
-      - "8000:80"   # HTTP port (redirects to HTTPS)
-      - "8443:443"  # HTTPS port (SSL)
+      - "8000:80"  # Exposed for desktop frontend direct access (not using reverse proxy)
     depends_on:
       - user_service
       - comments_service
       - chat_service
       - canvas_service
-
-    # --- AÑADIR ESTA SECCIÓN ---
     volumes:
       - ./Secure_Channel/certs/api_gateway/server.crt:/etc/ssl/certs/server.crt:ro
       - ./Secure_Channel/certs/api_gateway/server.key:/etc/ssl/private/server.key:ro
@@ -45,9 +41,9 @@ services:
       # Client certificates for mTLS
       - ./Secure_Channel/certs/api_gateway/client.crt:/etc/ssl/certs/client.crt:ro
       - ./Secure_Channel/certs/api_gateway/client.key:/etc/ssl/private/client.key:ro
-    # ----------------------------
     networks:
-      - owlboard-network
+      - owlboard-public-network   # Public network for direct desktop frontend access
+      - owlboard-private-network  # Private network for backend services communication
 
   mysql_db:
     image: mysql:8
@@ -58,11 +54,10 @@ services:
       MYSQL_DATABASE: user_db
       MYSQL_USER: user
       MYSQL_PASSWORD: password
-    ports:
-      - "3306:3306"
+    # REMOVED PORT MAPPING - Database isolated on private network for security
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./User_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql  # ← ADD THIS
+      - ./User_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
       interval: 10s
@@ -70,15 +65,13 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Database isolated on private network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: rabbitmq
     restart: always
-    ports:
-      - "5672:5672"   # AMQP protocol port
-      - "15672:15672" # Management UI
+    # REMOVED PORT MAPPINGS - Message broker isolated on private network
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -90,7 +83,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Message broker isolated on private network
 
   postgres_db:
     image: postgres:15-alpine
@@ -100,8 +93,7 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin
       POSTGRES_DB: canvas_db
-    ports:
-      - "5432:5432"
+    # REMOVED PORT MAPPING - Database isolated on private network for security
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./Canvas_Service/database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -112,7 +104,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Database isolated on private network
 
   user_service:
     build: ./User_Service
@@ -123,18 +115,15 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    ports:
-      - "5000:8443"  # accedes con localhost:5000
+    # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
-    # --- AÑADIR ESTA SECCIÓN ---
     volumes:
       - ./Secure_Channel/certs/user_service/server.crt:/etc/ssl/certs/server.crt:ro
       - ./Secure_Channel/certs/user_service/server.key:/etc/ssl/private/server.key:ro
-    # ----------------------------
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Backend service isolated on private network
   
   canvas_service:
     build:
@@ -148,13 +137,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    ports:
-      - "8080:8080"  # Canvas service accessible on localhost:8080
+    # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "postgres://admin:admin@postgres_db:5432/canvas_db?sslmode=disable"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Backend service isolated on private network
   
   mongo_db:
     image: mongo:6
@@ -163,8 +151,7 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: user
       MONGO_INITDB_ROOT_PASSWORD: password
-    ports:
-      - "27018:27017" # Puerto 27018
+    # REMOVED PORT MAPPING - Database isolated on private network for security
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -174,7 +161,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Database isolated on private network
 
   comments_service:
     build: ./Comments_Service
@@ -183,20 +170,18 @@ services:
     depends_on:
       mongo_db:
         condition: service_healthy
-    ports:
-      - "8001:8000"  # Accedes con localhost:8001 (changed to avoid port conflict)
+    # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Backend service isolated on private network
 
   redis_db:
     image: redis:7-alpine
     container_name: redis_db
     restart: always
     command: redis-server --requirepass password
-    ports:
-      - "6379:6379"
+    # REMOVED PORT MAPPING - Cache/database isolated on private network
     volumes:
       - redis_data:/data
     healthcheck:
@@ -206,7 +191,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Cache isolated on private network
 
   chat_service:
     build: ./Chat_Service
@@ -215,18 +200,15 @@ services:
     depends_on:
       redis_db:
         condition: service_healthy
-    ports:
-      - "8002:8443"  # Chat service accessible on localhost:8002
+    # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       REDIS_URL: "redis://:password@redis_db:6379/0"
       CORS_ORIGINS: '["http://localhost:3001", "http://localhost:3002"]'
-    # --- AÑADIR ESTA SECCIÓN ---
     volumes:
       - ./Secure_Channel/certs/chat_service/server.crt:/etc/ssl/certs/server.crt:ro
       - ./Secure_Channel/certs/chat_service/server.key:/etc/ssl/private/server.key:ro
-    # ----------------------------
     networks:
-      - owlboard-network
+      - owlboard-private-network  # Backend service isolated on private network
 
   mobile_frontend:
      build:
@@ -238,7 +220,7 @@ services:
        - reverse_proxy
        - api_gateway
      ports:
-       - "3001:80"
+       - "3001:80"  # Mobile frontend exposed for external access
      environment:
        # Use Reverse Proxy for enhanced security, rate limiting, and caching
        - API_BASE_URL=http://reverse_proxy/api
@@ -249,7 +231,7 @@ services:
        # External URLs (for devices outside Docker network)
        - EXTERNAL_API_URL=http://localhost:9000/api
      networks:
-       - owlboard-network
+       - owlboard-public-network  # Public access for mobile users
 
   nextjs_frontend:
     build:
@@ -268,29 +250,26 @@ services:
     depends_on:
       - api_gateway
     ports:
-      - "3002:3000"  # Next.js frontend accessible on localhost:3002
-    # --- ADD CERTIFICATE VOLUMES FOR SERVER-SIDE API CALLS ---
+      - "3002:3000"  # Next.js frontend exposed for external access
     volumes:
       - ./Secure_Channel/ca/ca.crt:/usr/local/share/ca-certificates/owlboard-ca.crt:ro
-    # ---------------------------------------------------------
     environment:
       - NODE_ENV=production
-      # Client-side API URLs (through API Gateway)
-      # For local development use HTTP to avoid TLS trust issues (or use HTTPS with a trusted CA)
-      # Browser can access the API Gateway over HTTP on port 8000 (redirects to container 80)
+      # Client-side API URLs (direct to API Gateway from browser - NOT using reverse proxy)
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api
       - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api/users
       - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api/comments
-      - NEXT_PUBLIC_CHAT_SERVICE_URL=/api
+      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api/chat
       - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api/canvas
-      # Server-side API URLs (through API Gateway - internal network)
-      - API_URL=https://api_gateway/api
-      - USER_SERVICE_URL=https://api_gateway/api/users
-      - COMMENTS_SERVICE_URL=https://api_gateway/api/comments
-      - CHAT_SERVICE_URL=https://api_gateway/api
-      - CANVAS_SERVICE_URL=https://api_gateway/api/canvas
+      # Server-side API URLs (internal Docker network via API Gateway)
+      - API_URL=http://api_gateway/api
+      - USER_SERVICE_URL=http://api_gateway/api/users
+      - COMMENTS_SERVICE_URL=http://api_gateway/api/comments
+      - CHAT_SERVICE_URL=http://api_gateway/api/chat
+      - CANVAS_SERVICE_URL=http://api_gateway/api/canvas
     networks:
-      - owlboard-network
+      - owlboard-public-network   # Public access for desktop users
+      - owlboard-private-network  # Private network for backend communication
 
 volumes:
   mongo_data:
@@ -300,5 +279,13 @@ volumes:
   rabbitmq_data:
 
 networks:
-  owlboard-network:
+  # Public network - Only for services that require external access
+  owlboard-public-network:
     driver: bridge
+    name: owlboard-public-network
+  
+  # Private network - All backend services, databases, and internal infrastructure
+  owlboard-private-network:
+    driver: bridge
+    name: owlboard-private-network
+    internal: true  # Critical: Prevents external routing for complete isolation
