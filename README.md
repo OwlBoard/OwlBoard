@@ -1,5 +1,40 @@
-# OwlBoard
-Main repository for the OwlBoard project - a collaborative digital whiteboard platform.
+# 🦉 OwlBoard
+
+**A collaborative digital whiteboard platform with real-time collaboration**
+
+[![Docker](https://img.shields.io/badge/docker-ready-blue)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+
+Main repository for the OwlBoard project - a collaborative digital whiteboard platform with microservices architecture, real-time chat, comments, and secure communication.
+
+---
+
+## 🚀 Quick Start (< 5 minutes)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/OwlBoard/OwlBoard.git
+cd OwlBoard
+
+# 2. Run the automated setup script
+./setup.sh
+
+# 3. Access the application
+# Desktop: http://localhost:3002
+# Mobile:  http://localhost:3001
+```
+
+**That's it!** The setup script handles everything automatically:
+- ✅ Validates prerequisites (Docker, Docker Compose, OpenSSL)
+- ✅ Generates SSL/TLS certificates for secure communication
+- ✅ Builds all Docker images
+- ✅ Starts all 13 services (frontend, backend, databases)
+- ✅ Waits for services to be healthy
+- ✅ Displays access URLs and useful commands
+
+📚 **For detailed instructions**, see [QUICKSTART.md](./QUICKSTART.md)
+
+---
 
 ## Organization Repositories
 
