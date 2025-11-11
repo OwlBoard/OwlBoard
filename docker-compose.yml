@@ -1,21 +1,26 @@
 services:
 
-  reverse_proxy:
+  # Load Balancer for API Gateways (distributes traffic across 4 replicas)
+  load_balancer:
     build:
       context: ./Reverse_Proxy
       dockerfile: Dockerfile
-    container_name: reverse_proxy
+    container_name: load_balancer
     restart: unless-stopped
     ports:
-      - "9000:80"  # Reverse proxy exposed on port 9000 for mobile frontend
+      - "8000:80"   # Desktop frontend access (load balanced)
+      - "9000:9000" # Mobile frontend access (load balanced)
     depends_on:
-      api_gateway:
-        condition: service_started
+      - api_gateway_1
+      - api_gateway_2
+      - api_gateway_3
+      - api_gateway_4
     volumes:
       - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      - ./load_balancer_nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      - owlboard-public-network  # Public access for mobile frontend
-      - owlboard-private-network # Private network access to API gateway
+      - owlboard-public-network  # Public access for all frontends
+      - owlboard-private-network # Private network access to API gateways
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
@@ -23,12 +28,12 @@ services:
       retries: 3
       start_period: 5s
 
-  api_gateway:
+  # API Gateway Replica 1
+  api_gateway_1:
     build: ./owlboard-orchestrator
-    container_name: api_gateway
+    container_name: api_gateway_1
     restart: always
-    ports:
-      - "8000:80"  # Exposed for desktop frontend direct access (not using reverse proxy)
+    # NO external ports - accessed only through load balancer
     depends_on:
       - user_service
       - comments_service
@@ -42,7 +47,69 @@ services:
       - ./Secure_Channel/certs/api_gateway/client.crt:/etc/ssl/certs/client.crt:ro
       - ./Secure_Channel/certs/api_gateway/client.key:/etc/ssl/private/client.key:ro
     networks:
-      - owlboard-public-network   # Public network for direct desktop frontend access
+      - owlboard-private-network  # Private network for backend services communication
+
+  # API Gateway Replica 2
+  api_gateway_2:
+    build: ./owlboard-orchestrator
+    container_name: api_gateway_2
+    restart: always
+    # NO external ports - accessed only through load balancer
+    depends_on:
+      - user_service
+      - comments_service
+      - chat_service
+      - canvas_service
+    volumes:
+      - ./Secure_Channel/certs/api_gateway/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/api_gateway/server.key:/etc/ssl/private/server.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      # Client certificates for mTLS
+      - ./Secure_Channel/certs/api_gateway/client.crt:/etc/ssl/certs/client.crt:ro
+      - ./Secure_Channel/certs/api_gateway/client.key:/etc/ssl/private/client.key:ro
+    networks:
+      - owlboard-private-network  # Private network for backend services communication
+
+  # API Gateway Replica 3
+  api_gateway_3:
+    build: ./owlboard-orchestrator
+    container_name: api_gateway_3
+    restart: always
+    # NO external ports - accessed only through load balancer
+    depends_on:
+      - user_service
+      - comments_service
+      - chat_service
+      - canvas_service
+    volumes:
+      - ./Secure_Channel/certs/api_gateway/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/api_gateway/server.key:/etc/ssl/private/server.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      # Client certificates for mTLS
+      - ./Secure_Channel/certs/api_gateway/client.crt:/etc/ssl/certs/client.crt:ro
+      - ./Secure_Channel/certs/api_gateway/client.key:/etc/ssl/private/client.key:ro
+    networks:
+      - owlboard-private-network  # Private network for backend services communication
+
+  # API Gateway Replica 4
+  api_gateway_4:
+    build: ./owlboard-orchestrator
+    container_name: api_gateway_4
+    restart: always
+    # NO external ports - accessed only through load balancer
+    depends_on:
+      - user_service
+      - comments_service
+      - chat_service
+      - canvas_service
+    volumes:
+      - ./Secure_Channel/certs/api_gateway/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/api_gateway/server.key:/etc/ssl/private/server.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      # Client certificates for mTLS
+      - ./Secure_Channel/certs/api_gateway/client.crt:/etc/ssl/certs/client.crt:ro
+      - ./Secure_Channel/certs/api_gateway/client.key:/etc/ssl/private/client.key:ro
+    networks:
       - owlboard-private-network  # Private network for backend services communication
 
   mysql_db:
@@ -217,17 +284,16 @@ services:
      container_name: mobile_frontend
      restart: always
      depends_on:
-       - reverse_proxy
-       - api_gateway
+       - load_balancer
      ports:
        - "3001:80"  # Mobile frontend exposed for external access
      environment:
-       # Use Reverse Proxy for enhanced security, rate limiting, and caching
-       - API_BASE_URL=http://reverse_proxy/api
-       - USER_SERVICE_URL=http://reverse_proxy/api/users
-       - COMMENTS_SERVICE_URL=http://reverse_proxy/api/comments
-       - CHAT_SERVICE_URL=http://reverse_proxy/api/chat
-       - CANVAS_SERVICE_URL=http://reverse_proxy/api/canvas
+       # Use Load Balancer for high availability across 4 API Gateway replicas
+       - API_BASE_URL=http://load_balancer:9000/api
+       - USER_SERVICE_URL=http://load_balancer:9000/api/users
+       - COMMENTS_SERVICE_URL=http://load_balancer:9000/api/comments
+       - CHAT_SERVICE_URL=http://load_balancer:9000/api/chat
+       - CANVAS_SERVICE_URL=http://load_balancer:9000/api/canvas
        # External URLs (for devices outside Docker network)
        - EXTERNAL_API_URL=http://localhost:9000/api
      networks:
@@ -248,25 +314,25 @@ services:
     container_name: nextjs_frontend
     restart: always
     depends_on:
-      - api_gateway
+      - load_balancer
     ports:
       - "3002:3000"  # Next.js frontend exposed for external access
     volumes:
       - ./Secure_Channel/ca/ca.crt:/usr/local/share/ca-certificates/owlboard-ca.crt:ro
     environment:
       - NODE_ENV=production
-      # Client-side API URLs (direct to API Gateway from browser - NOT using reverse proxy)
+      # Client-side API URLs (load balanced across 4 API Gateway replicas)
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api
       - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api/users
       - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api/comments
       - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api/chat
       - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api/canvas
-      # Server-side API URLs (internal Docker network via API Gateway)
-      - API_URL=http://api_gateway/api
-      - USER_SERVICE_URL=http://api_gateway/api/users
-      - COMMENTS_SERVICE_URL=http://api_gateway/api/comments
-      - CHAT_SERVICE_URL=http://api_gateway/api/chat
-      - CANVAS_SERVICE_URL=http://api_gateway/api/canvas
+      # Server-side API URLs (internal Docker network via Load Balancer)
+      - API_URL=http://load_balancer/api
+      - USER_SERVICE_URL=http://load_balancer/api/users
+      - COMMENTS_SERVICE_URL=http://load_balancer/api/comments
+      - CHAT_SERVICE_URL=http://load_balancer/api/chat
+      - CANVAS_SERVICE_URL=http://load_balancer/api/canvas
     networks:
       - owlboard-public-network   # Public access for desktop users
       - owlboard-private-network  # Private network for backend communication
