@@ -35,6 +35,7 @@ services:
     restart: always
     # NO external ports - accessed only through load balancer
     depends_on:
+      - auth_service
       - user_service
       - comments_service
       - chat_service
@@ -173,6 +174,57 @@ services:
     networks:
       - owlboard-private-network  # Database isolated on private network
 
+  # ========================================
+  # Auth Service - Centralized Authentication
+  # ========================================
+  auth_service:
+    build: ./Auth_Service
+    container_name: auth_service
+    restart: always
+    depends_on:
+      redis_db:
+        condition: service_healthy
+      mysql_db:
+        condition: service_healthy
+    # REMOVED PORT MAPPING - Backend service isolated on private network
+    # Accessible only from API Gateway and other backend services
+    environment:
+      # Environment
+      ENVIRONMENT: "production"
+      
+      # JWT Configuration
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-this-in-production-min-32-chars-recommended-64}"
+      JWT_ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      
+      # Redis Configuration (for token blacklist and sessions)
+      REDIS_HOST: "redis_db"
+      REDIS_PORT: "6379"
+      REDIS_DB: "1"  # Use DB 1 for auth (DB 0 for chat)
+      REDIS_PASSWORD: "password"
+      
+      # MySQL Configuration (read-only access to User_Service DB)
+      DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
+      
+      # Security Settings
+      BCRYPT_ROUNDS: "12"
+      MAX_LOGIN_ATTEMPTS: "5"
+      LOCKOUT_DURATION_MINUTES: "15"
+    volumes:
+      # TLS/mTLS certificates
+      - ./Secure_Channel/certs/auth_service/server.crt:/etc/ssl/certs/auth_service.crt:ro
+      - ./Secure_Channel/certs/auth_service/server.key:/etc/ssl/private/auth_service.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+    networks:
+      - owlboard-private-network  # Backend service isolated on private network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; import ssl; ctx = ssl._create_unverified_context(); urllib.request.urlopen('https://localhost:8443/health', context=ctx)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   user_service:
     build: ./User_Service
     container_name: user_service
@@ -182,13 +234,18 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      auth_service:
+        condition: service_healthy
     # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
+      CA_CERT_PATH: "/etc/ssl/certs/ca.crt"
     volumes:
       - ./Secure_Channel/certs/user_service/server.crt:/etc/ssl/certs/server.crt:ro
       - ./Secure_Channel/certs/user_service/server.key:/etc/ssl/private/server.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
     networks:
       - owlboard-private-network  # Backend service isolated on private network
   
@@ -204,10 +261,13 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      auth_service:
+        condition: service_healthy
     # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "postgres://admin:admin@postgres_db:5432/canvas_db?sslmode=disable"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
     networks:
       - owlboard-private-network  # Backend service isolated on private network
   
@@ -237,9 +297,15 @@ services:
     depends_on:
       mongo_db:
         condition: service_healthy
+      auth_service:
+        condition: service_healthy
     # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
+      CA_CERT_PATH: "/etc/ssl/certs/ca.crt"
+    volumes:
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
     networks:
       - owlboard-private-network  # Backend service isolated on private network
 
@@ -267,13 +333,18 @@ services:
     depends_on:
       redis_db:
         condition: service_healthy
+      auth_service:
+        condition: service_healthy
     # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       REDIS_URL: "redis://:password@redis_db:6379/0"
       CORS_ORIGINS: '["http://localhost:3001", "http://localhost:3002"]'
+      AUTH_SERVICE_URL: "https://auth_service:8443"
+      CA_CERT_PATH: "/etc/ssl/certs/ca.crt"
     volumes:
       - ./Secure_Channel/certs/chat_service/server.crt:/etc/ssl/certs/server.crt:ro
       - ./Secure_Channel/certs/chat_service/server.key:/etc/ssl/private/server.key:ro
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
     networks:
       - owlboard-private-network  # Backend service isolated on private network
 
