@@ -1,15 +1,45 @@
 services:
 
-  # Load Balancer for API Gateways (distributes traffic across 4 replicas)
+  # Public Reverse Proxy - SINGLE PUBLIC ENTRY POINT (DMZ)
+  # This is the ONLY service exposed to the internet
+  reverse_proxy:
+    build:
+      context: ./Reverse_Proxy
+      dockerfile: Dockerfile
+    container_name: reverse_proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP access (redirects to HTTPS)
+      - "443:443"    # HTTPS access for all traffic
+      - "3001:3001"  # Mobile frontend access
+      - "3002:3002"  # Desktop frontend access
+    depends_on:
+      - load_balancer
+      - mobile_frontend
+      - nextjs_frontend
+    volumes:
+      - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      - ./Secure_Channel/certs/reverse_proxy/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/reverse_proxy/server.key:/etc/ssl/private/server.key:ro
+      - ./Reverse_Proxy/public_nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - owlboard-public-network  # Only public-facing service
+      - owlboard-private-network # Connects to internal load balancer
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Internal Load Balancer for API Gateways (PRIVATE NETWORK ONLY)
   load_balancer:
     build:
       context: ./Reverse_Proxy
       dockerfile: Dockerfile
     container_name: load_balancer
     restart: unless-stopped
-    ports:
-      - "8000:80"   # Desktop frontend access (load balanced)
-      - "9000:9000" # Mobile frontend access (load balanced)
+    # NO external ports - internal only, accessed via reverse_proxy
     depends_on:
       - api_gateway_1
       - api_gateway_2
@@ -17,12 +47,13 @@ services:
       - api_gateway_4
     volumes:
       - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+      - ./Secure_Channel/certs/load_balancer/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/load_balancer/server.key:/etc/ssl/private/server.key:ro
       - ./load_balancer_nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      - owlboard-public-network  # Public access for all frontends
-      - owlboard-private-network # Private network access to API gateways
+      - owlboard-private-network # Private network ONLY
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://127.0.0.1/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -182,7 +213,7 @@ services:
   # Auth Service - Centralized Authentication
   # ========================================
   auth_service:
-    build: ./Auth_Service
+    build: ./auth_Service
     container_name: auth_service
     restart: always
     depends_on:
@@ -217,13 +248,13 @@ services:
       LOCKOUT_DURATION_MINUTES: "15"
     volumes:
       # TLS/mTLS certificates
-      - ./Secure_Channel/certs/auth_service/server.crt:/etc/ssl/certs/auth_service.crt:ro
-      - ./Secure_Channel/certs/auth_service/server.key:/etc/ssl/private/auth_service.key:ro
+      - ./Secure_Channel/certs/auth_service/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./Secure_Channel/certs/auth_service/server.key:/etc/ssl/private/server.key:ro
       - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
     networks:
       - owlboard-private-network  # Backend service isolated on private network
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.connect(('localhost', 8443)); s.close()"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -244,7 +275,7 @@ services:
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@mysql_db/user_db"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
-      AUTH_SERVICE_URL: "http://auth_service:8000"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
       CA_CERT_PATH: "/etc/ssl/certs/ca.crt"
     volumes:
       - ./Secure_Channel/certs/user_service/server.crt:/etc/ssl/certs/server.crt:ro
@@ -271,7 +302,7 @@ services:
     environment:
       DATABASE_URL: "postgres://admin:admin@postgres_db:5432/canvas_db?sslmode=disable"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
-      AUTH_SERVICE_URL: "http://auth_service:8000"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
     networks:
       - owlboard-private-network  # Backend service isolated on private network
   
@@ -306,7 +337,7 @@ services:
     # REMOVED PORT MAPPING - Backend service isolated on private network
     environment:
       DATABASE_URL: "mongodb://user:password@mongo_db:27017/comments_db?authSource=admin"
-      AUTH_SERVICE_URL: "http://auth_service:8000"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
       CA_CERT_PATH: "/etc/ssl/certs/ca.crt"
     volumes:
       - ./Secure_Channel/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
@@ -343,7 +374,7 @@ services:
     environment:
       REDIS_URL: "redis://:password@redis_db:6379/0"
       CORS_ORIGINS: '["http://localhost:3001", "http://localhost:3002"]'
-      AUTH_SERVICE_URL: "http://auth_service:8000"
+      AUTH_SERVICE_URL: "https://auth_service:8443"
       CA_CERT_PATH: "/etc/ssl/certs/ca.crt"
     volumes:
       - ./Secure_Channel/certs/chat_service/server.crt:/etc/ssl/certs/server.crt:ro
@@ -360,19 +391,18 @@ services:
      restart: always
      depends_on:
        - load_balancer
-     ports:
-       - "3001:80"  # Mobile frontend exposed for external access
+     # NO external ports - accessed only through reverse_proxy
      environment:
-       # Use Load Balancer for high availability across 4 API Gateway replicas
-       - API_BASE_URL=http://load_balancer:9000/api
-       - USER_SERVICE_URL=http://load_balancer:9000/api/users
-       - COMMENTS_SERVICE_URL=http://load_balancer:9000/api/comments
-       - CHAT_SERVICE_URL=http://load_balancer:9000/api/chat
-       - CANVAS_SERVICE_URL=http://load_balancer:9000/api/canvas
-       # External URLs (for devices outside Docker network)
-       - EXTERNAL_API_URL=http://localhost:9000/api
+       # Use internal Load Balancer for high availability
+       - API_BASE_URL=https://load_balancer/api
+       - USER_SERVICE_URL=https://load_balancer/api/users
+       - COMMENTS_SERVICE_URL=https://load_balancer/api/comments
+       - CHAT_SERVICE_URL=https://load_balancer/api/chat
+       - CANVAS_SERVICE_URL=https://load_balancer/api/canvas
+       # External URLs (for client browsers - through reverse proxy)
+       - EXTERNAL_API_URL=https://localhost/api
      networks:
-       - owlboard-public-network  # Public access for mobile users
+       - owlboard-private-network  # Private network ONLY
 
   nextjs_frontend:
     build:
@@ -381,36 +411,34 @@ services:
       cache_from:
         - nextjs_frontend:latest
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000/api
-        NEXT_PUBLIC_USER_SERVICE_URL: http://localhost:8000/api/users
-        NEXT_PUBLIC_COMMENTS_SERVICE_URL: http://localhost:8000/api/comments
+        NEXT_PUBLIC_API_URL: https://localhost/api
+        NEXT_PUBLIC_USER_SERVICE_URL: https://localhost/api/users
+        NEXT_PUBLIC_COMMENTS_SERVICE_URL: https://localhost/api/comments
         NEXT_PUBLIC_CHAT_SERVICE_URL: /api
-        NEXT_PUBLIC_CANVAS_SERVICE_URL: http://localhost:8000/api/canvas
+        NEXT_PUBLIC_CANVAS_SERVICE_URL: https://localhost/api/canvas
     container_name: nextjs_frontend
     restart: always
     depends_on:
       - load_balancer
-    ports:
-      - "3002:3000"  # Next.js frontend exposed for external access
+    # NO external ports - accessed only through reverse_proxy
     volumes:
       - ./Secure_Channel/ca/ca.crt:/usr/local/share/ca-certificates/owlboard-ca.crt:ro
     environment:
       - NODE_ENV=production
-      # Client-side API URLs (load balanced across 4 API Gateway replicas)
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-      - NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:8000/api/users
-      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=http://localhost:8000/api/comments
-      - NEXT_PUBLIC_CHAT_SERVICE_URL=http://localhost:8000/api/chat
-      - NEXT_PUBLIC_CANVAS_SERVICE_URL=http://localhost:8000/api/canvas
+      # Client-side API URLs (through reverse proxy)
+      - NEXT_PUBLIC_API_URL=https://localhost/api
+      - NEXT_PUBLIC_USER_SERVICE_URL=https://localhost/api/users
+      - NEXT_PUBLIC_COMMENTS_SERVICE_URL=https://localhost/api/comments
+      - NEXT_PUBLIC_CHAT_SERVICE_URL=https://localhost/api/chat
+      - NEXT_PUBLIC_CANVAS_SERVICE_URL=https://localhost/api/canvas
       # Server-side API URLs (internal Docker network via Load Balancer)
-      - API_URL=http://load_balancer/api
-      - USER_SERVICE_URL=http://load_balancer/api/users
-      - COMMENTS_SERVICE_URL=http://load_balancer/api/comments
-      - CHAT_SERVICE_URL=http://load_balancer/api/chat
-      - CANVAS_SERVICE_URL=http://load_balancer/api/canvas
+      - API_URL=https://load_balancer/api
+      - USER_SERVICE_URL=https://load_balancer/api/users
+      - COMMENTS_SERVICE_URL=https://load_balancer/api/comments
+      - CHAT_SERVICE_URL=https://load_balancer/api/chat
+      - CANVAS_SERVICE_URL=https://load_balancer/api/canvas
     networks:
-      - owlboard-public-network   # Public access for desktop users
-      - owlboard-private-network  # Private network for backend communication
+      - owlboard-private-network  # Private network ONLY
 
 volumes:
   mongo_data:

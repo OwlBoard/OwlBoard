@@ -86,6 +86,9 @@ This main repository contains the Docker Compose configuration to run the entire
 
 ## 📚 Documentation
 
+- **[SECURITY_ARCHITECTURE_DMZ.md](./SECURITY_ARCHITECTURE_DMZ.md)** - Complete DMZ security architecture guide
+- **[DMZ_QUICK_REFERENCE.md](./DMZ_QUICK_REFERENCE.md)** - Quick reference for daily operations
+- **[SECURITY_COMPARISON.md](./SECURITY_COMPARISON.md)** - Before/after security improvements
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Detailed deployment guide for local development and production
 - Port configuration and troubleshooting
 - Production deployment checklist
@@ -93,11 +96,24 @@ This main repository contains the Docker Compose configuration to run the entire
 
 ## 🏗️ Architecture
 
-OwlBoard uses a microservices architecture with:
-- **API Gateway** (Nginx) - Routes all requests and handles CORS
-- **Backend Services** - Independent microservices for each feature
-- **Frontend Applications** - Separate web and mobile interfaces
-- **Databases** - MySQL, MongoDB, PostgreSQL, Redis for different services
+OwlBoard uses a **DMZ (Demilitarized Zone) microservices architecture** with:
+- **Public Reverse Proxy** - Single entry point with DDoS protection and rate limiting
+- **Internal Load Balancer** - Distributes traffic across 4 API Gateway replicas
+- **API Gateways (4 replicas)** - Routes requests with mTLS support
+- **Backend Services** - Independent microservices for each feature (all on private network)
+- **Frontend Applications** - Separate web and mobile interfaces (isolated on private network)
+- **Databases** - MySQL, MongoDB, PostgreSQL, Redis (completely isolated, no external ports)
+
+### Security Features
+- ✅ **Single Public Entry Point** - Only reverse proxy exposed to internet
+- ✅ **Network Isolation** - 18 services on private network (internal: true)
+- ✅ **Rate Limiting** - 50 req/sec with DDoS protection
+- ✅ **SSL/TLS Everywhere** - TLS 1.2+ with strong ciphers
+- ✅ **Defense in Depth** - 5 security layers
+- ✅ **Zero Database Exposure** - No external database ports
+- ✅ **Attack Surface Reduction** - 85% smaller than traditional architecture
+
+📚 **See [SECURITY_ARCHITECTURE_DMZ.md](./SECURITY_ARCHITECTURE_DMZ.md) for detailed security documentation**
 - **Message Queue** - RabbitMQ for async communication
 
 ## 🐛 Troubleshooting
