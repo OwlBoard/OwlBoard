@@ -5,19 +5,21 @@
 OwlBoard is a **microservices-based collaborative whiteboard platform** with strict **network segmentation** and **zero-trust security**. The system uses **dual-network architecture** for defense-in-depth.
 
 ### Network Topology (Critical)
-- **Public Network** (`owlboard-public-network`): User-facing services only (frontends, gateways)
-- **Private Network** (`owlboard-private-network`): Backend services, databases, message broker
+- **Public Network** (`owlboard-public-network`): Only proxy services for external access
+- **Private Network** (`owlboard-private-network`): All frontends, backend services, databases, message broker
   - `internal: true` prevents external routing - DO NOT expose database ports
-  - All backend services communicate via internal Docker DNS (e.g., `mysql_db:3306`, not `localhost:3306`)
+  - All services communicate via internal Docker DNS (e.g., `mysql_db:3306`, not `localhost:3306`)
 
 ### Service Communication Pattern
 ```
-Browser → Frontend (3001/3002) → Load Balancer (8000/9000) → API Gateways (4 replicas) → Backend Services → Databases
+Browser → Desktop Proxy (8000) → Next.js Frontend → Load Balancer → API Gateways (4 replicas) → Backend Services → Databases
+Browser → Mobile Proxy (3001) → Flutter Frontend → Load Balancer → API Gateways (4 replicas) → Backend Services → Databases
 ```
-- Desktop frontend → Load Balancer port 8000 → Round-robin across 4 API Gateway replicas
-- Mobile frontend → Load Balancer port 9000 → Round-robin across 4 API Gateway replicas
+- Desktop: External users → desktop_proxy:8000 → nextjs_frontend (private network) → load_balancer → 4 API Gateway replicas
+- Mobile: External users → mobile_proxy:3001 → mobile_frontend (private network) → load_balancer → 4 API Gateway replicas
 - Load balancer uses `least_conn` algorithm with automatic health checks and failover
 - API Gateways (4 replicas) are NOT exposed externally - accessed only through load balancer
+- Frontends are isolated on private network - accessed only through their respective proxies
 - Backend services are isolated on private network (no port mappings in docker-compose.yml)
 
 ## Core Components
