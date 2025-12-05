@@ -42,7 +42,28 @@ git submodule update --init --recursive
 
 ### 2. Ejecutar el Script de Instalación Automatizada
 
+#### En Linux/Mac:
+
 ```bash
+./setup.sh
+```
+
+#### En Windows:
+
+**Opción 1: PowerShell (Recomendado)**
+```powershell
+# Ejecutar PowerShell como Administrador
+.\setup.ps1
+```
+
+**Opción 2: Git Bash**
+```bash
+./setup-windows.sh
+```
+
+**Opción 3: WSL (Windows Subsystem for Linux)**
+```bash
+# Si tienes WSL instalado, usa el script de Linux
 ./setup.sh
 ```
 
@@ -176,11 +197,16 @@ docker compose up --build -d
 
 ### 1. "Cannot connect to Docker daemon"
 
+**Linux/Mac:**
 ```bash
 # Iniciar Docker
 sudo systemctl start docker
+```
 
-# O en Mac/Windows, abre Docker Desktop
+**Windows:**
+```powershell
+# Abrir Docker Desktop desde el menú inicio
+# Asegurarte de que Docker Desktop esté corriendo
 ```
 
 ### 2. Submódulos Vacíos
@@ -194,15 +220,57 @@ git submodule update --init --recursive --force
 
 Si ves errores como `port is already allocated`:
 
+**Linux/Mac:**
 ```bash
 # Ver qué está usando el puerto
 sudo lsof -i :3002
 sudo lsof -i :443
 
-# Detener servicios conflictivos o cambiar puertos en docker-compose.yml
+# Detener servicios conflictivos
 ```
 
-### 4. Servicios No Saludables
+**Windows (PowerShell como Administrador):**
+```powershell
+# Ver qué está usando el puerto
+netstat -ano | findstr :3002
+netstat -ano | findstr :443
+
+# Matar proceso por PID
+Stop-Process -Id <PID> -Force
+```
+
+### 4. Problemas con PowerShell
+
+**Error: "cannot be loaded because running scripts is disabled"**
+
+```powershell
+# Ejecutar PowerShell como Administrador y ejecutar:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Luego volver a ejecutar:
+.\setup.ps1
+```
+
+### 5. Problemas con Git Bash en Windows
+
+Si `./setup-windows.sh` no funciona:
+
+```bash
+# Dar permisos de ejecución
+chmod +x setup-windows.sh
+
+# Ejecutar
+./setup-windows.sh
+```
+
+### 6. OpenSSL no encontrado en Windows
+
+El script de PowerShell busca OpenSSL en Git for Windows. Si no lo encuentra:
+
+1. Instala Git for Windows: https://git-scm.com/download/win
+2. O usa WSL (Windows Subsystem for Linux)
+
+### 7. Servicios No Saludables
 
 ```bash
 # Ver logs del servicio con problemas
@@ -219,7 +287,7 @@ cd ..
 docker compose restart
 ```
 
-### 5. "No space left on device"
+### 8. "No space left on device"
 
 ```bash
 # Limpiar imágenes y contenedores viejos
