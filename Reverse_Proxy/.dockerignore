@@ -1,0 +1,9 @@
+# Ignore common files that shouldn't be in the Docker build context
+*.md
+*.txt
+.git
+.gitignore
+.gitmodules
+*.log
+.env
+.env.*
