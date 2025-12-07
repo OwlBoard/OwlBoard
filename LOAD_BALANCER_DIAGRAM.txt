@@ -1,0 +1,177 @@
+```
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    OwlBoard Load Balanced Architecture                     ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+                              EXTERNAL USERS
+                                    │
+                    ┌───────────────┴───────────────┐
+                    │                               │
+              ┌─────▼──────┐                 ┌──────▼─────┐
+              │  Desktop   │                 │   Mobile   │
+              │  Frontend  │                 │  Frontend  │
+              │ (Next.js)  │                 │ (Flutter)  │
+              │ Port: 3002 │                 │ Port: 3001 │
+              └─────┬──────┘                 └──────┬─────┘
+                    │                               │
+                    │ localhost:8000                │ localhost:9000
+                    │                               │
+                    └───────────────┬───────────────┘
+                                    │
+                          ┌─────────▼─────────┐
+                          │  Load Balancer    │◄─────────┐
+                          │     (Nginx)       │          │
+                          │  Ports: 8000/9000 │          │ PUBLIC NETWORK
+                          │  Algorithm:       │          │ (bridge network)
+                          │   least_conn      │          │ External routing enabled
+                          └─────────┬─────────┘◄─────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+   ┌────────────────┼───────────────┼───────────────┼────────────────┐
+   │ PRIVATE        │               │               │                │
+   │ NETWORK        │               │               │                │
+   │ (internal:true)│               │               │                │
+   │ No external    │               │               │                │
+   │ routing        │               │               │                │
+   │           ┌────▼────┐     ┌────▼────┐     ┌────▼────┐     ┌────▼────┐
+   │           │   API   │     │   API   │     │   API   │     │   API   │
+   │           │Gateway 1│     │Gateway 2│     │Gateway 3│     │Gateway 4│
+   │           │Port: 80 │     │Port: 80 │     │Port: 80 │     │Port: 80 │
+   │           └────┬────┘     └────┬────┘     └────┬────┘     └────┬────┘
+   │                │               │               │               │
+   │                └───────────────┼───────────────┘               │
+   │                                │                               │
+   │        ┌───────────────────────┼───────────────────────────────┤
+   │        │                       │                       │       │
+   │   ┌────▼────┐           ┌──────▼─────┐        ┌──────▼─────┐ │ ┌────▼────┐
+   │   │  User   │           │  Canvas    │        │    Chat    │ │ │Comments │
+   │   │ Service │           │  Service   │        │  Service   │ │ │ Service │
+   │   │(FastAPI)│           │   (Gin)    │        │ (FastAPI)  │ │ │(FastAPI)│
+   │   │Port:8443│           │ Port:8080  │        │ Port:8443  │ │ │Port:8000│
+   │   │  mTLS   │           │            │        │   mTLS     │ │ │         │
+   │   └────┬────┘           └──────┬─────┘        └──────┬─────┘ │ └────┬────┘
+   │        │                       │                     │        │      │
+   │   ┌────▼────┐           ┌──────▼─────┐        ┌─────▼──────┐ │ ┌────▼────┐
+   │   │  MySQL  │           │ PostgreSQL │        │   Redis    │ │ │ MongoDB │
+   │   │Database │           │  Database  │        │   Cache    │ │ │Database │
+   │   │Port:3306│           │ Port:5432  │        │ Port:6379  │ │ │Port:27017│
+   │   └─────────┘           └────────┬───┘        └────────────┘ │ └─────────┘
+   │                                  │                            │
+   │                           ┌──────▼─────┐                      │
+   │                           │  RabbitMQ  │                      │
+   │                           │  Message   │                      │
+   │                           │   Broker   │                      │
+   │                           │ Port:5672  │                      │
+   │                           └────────────┘                      │
+   │                                                                │
+   └────────────────────────────────────────────────────────────────┘
+   
+NOTE: Networks are OVERLAY networks - containers exist WITHIN them, not behind them.
+      Load Balancer is on BOTH networks (public + private) - it's the bridge between them.
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║  NETWORK ARCHITECTURE EXPLANATION                                          ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║  Docker networks are OVERLAY networks - not physical separators            ║
+║                                                                            ║
+║  PUBLIC NETWORK (owlboard-public-network):                                ║
+║    • Bridge network with external routing ENABLED                         ║
+║    • Containers can be reached from host machine (localhost)              ║
+║    • Contains: Frontends, Load Balancer                                   ║
+║                                                                            ║
+║  PRIVATE NETWORK (owlboard-private-network):                              ║
+║    • Bridge network with `internal: true` - NO external routing           ║
+║    • Containers can ONLY communicate with each other                      ║
+║    • Cannot be reached from host or internet                              ║
+║    • Contains: Load Balancer, API Gateways, Backend Services, Databases   ║
+║                                                                            ║
+║  DUAL-HOMED CONTAINERS (on BOTH networks):                                ║
+║    • Load Balancer: Receives external traffic (public), routes to         ║
+║                     gateways (private) - acts as security bridge          ║
+║    • Next.js Frontend: Receives browser requests (public), makes          ║
+║                        server-side calls to services (private)            ║
+║                                                                            ║
+║  KEY INSIGHT: Networks are like VLANs - containers have virtual NICs      ║
+║               on each network they're connected to. The Load Balancer     ║
+║               literally has TWO network interfaces (one on each network). ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║  ACTUAL NETWORK TOPOLOGY (More Accurate View)                              ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║                                                                            ║
+║  ┌─────────────────── PUBLIC NETWORK ────────────────────────┐            ║
+║  │  (owlboard-public-network)                                │            ║
+║  │  external routing ENABLED                                 │            ║
+║  │                                                            │            ║
+║  │  [Desktop Frontend:3002]  [Mobile Frontend:3001]          │            ║
+║  │                   │                │                      │            ║
+║  │                   └────────┬───────┘                      │            ║
+║  │                            │                              │            ║
+║  │                   [Load Balancer:8000/9000] ◄─────────────┼─── External Access
+║  │                            │                              │            ║
+║  └────────────────────────────┼──────────────────────────────┘            ║
+║                               │                                           ║
+║                               │ (Load Balancer has 2 NICs)               ║
+║                               │                                           ║
+║  ┌────────────────── PRIVATE NETWORK ───────────────────────┐            ║
+║  │  (owlboard-private-network)                              │            ║
+║  │  internal: true - NO external routing                    │            ║
+║  │                                                           │            ║
+║  │                   [Load Balancer:80/9000] ◄─────── Same container,    ║
+║  │                            │                       different NIC       ║
+║  │         ┌──────────────────┼──────────────────┐                       ║
+║  │         │                  │                  │                       ║
+║  │   [api_gateway_1]  [api_gateway_2]  [api_gateway_3]  [api_gateway_4] ║
+║  │         │                  │                  │           │           ║
+║  │         └──────────────────┼──────────────────┴───────────┘           ║
+║  │                            │                                           ║
+║  │    ┌───────────────────────┼────────────────────────┐                 ║
+║  │    │                       │                        │                 ║
+║  │  [User]              [Canvas]              [Chat]   [Comments]        ║
+║  │  Service             Service               Service  Service           ║
+║  │    │                    │                     │        │              ║
+║  │  [MySQL]          [PostgreSQL]            [Redis]  [MongoDB]          ║
+║  │                        │                                               ║
+║  │                   [RabbitMQ]                                          ║
+║  │                                                                        ║
+║  └───────────────────────────────────────────────────────────────────────┘
+║                                                                            ║
+║  NOTE: All containers inside the private network box are ISOLATED from    ║
+║        external access. The Load Balancer is the ONLY bridge between      ║
+║        the public (external) and private (internal) networks.             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+║  ✓ Rate Limiting: 100 req/s per IP at load balancer level                 ║
+║  ✓ Monitoring: /health and /lb-status endpoints                           ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+CONTAINER COUNT: 16 Total
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  • 1  Load Balancer
+  • 4  API Gateway Replicas (load balanced)
+  • 2  Frontends (Desktop + Mobile)
+  • 4  Backend Services (User, Canvas, Chat, Comments)
+  • 4  Databases (MySQL, PostgreSQL, Redis, MongoDB)
+  • 1  Message Broker (RabbitMQ)
+
+TRAFFIC FLOW EXAMPLES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Desktop User Request:
+  Browser → localhost:3002 → Load Balancer:8000 → API Gateway (1-4) → User Service
+
+Mobile User Request:
+  App → localhost:3001 → Load Balancer:9000 → API Gateway (1-4) → Chat Service
+
+WebSocket Connection:
+  Client → Load Balancer → API Gateway (sticky to one) → Chat Service → Redis
+
+SECURITY LAYERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. Network Segmentation (Public vs Private networks)
+  2. Load Balancer Rate Limiting (100 req/s per IP)
+  3. API Gateway CORS Policies (centralized)
+  4. Backend mTLS (User & Chat services)
+  5. Database Isolation (internal: true on private network)
+  6. No Direct Database Access (all ports unexposed)
+```
