@@ -25,7 +25,7 @@ Browser → Mobile Proxy (3001) → Flutter Frontend → Load Balancer → API G
 ## Core Components
 
 ### Frontends
-- **Web_Front_End**: Next.js 14+ (TypeScript, React Bootstrap)
+- **Desktop_Front_End**: Next.js 14+ (TypeScript, React Bootstrap)
   - Client-side URLs: `NEXT_PUBLIC_*` env vars point to `localhost:8000`
   - Server-side URLs: Use internal Docker network (`http://api_gateway/api`)
 - **Mobile_Front_End**: Flutter (Dart, Provider state management)

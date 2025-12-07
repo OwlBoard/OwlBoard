@@ -20,7 +20,7 @@ cd OwlBoard
 ./setup.sh
 
 # 3. Access the application
-# Web: http://localhost:3002
+# Desktop: http://localhost:3002
 # Mobile:  http://localhost:3001
 ```
 
@@ -41,7 +41,7 @@ cd OwlBoard
 This is the main repository that orchestrates the entire OwlBoard ecosystem. Below are links to all the repositories in the OwlBoard organization:
 
 ### 🖥️ Frontend
-- **[Web_Front_End](https://github.com/OwlBoard/Web_Front_End)** - Repository for the web front end (JavaScript)
+- **[Desktop_Front_End](https://github.com/OwlBoard/Desktop_Front_End)** - Repository for the web front end (JavaScript)
 - **[Mobile_Front_End](https://github.com/OwlBoard/Mobile_Front_End)** - Repository for the mobile front end (Dart)
 
 ### ⚙️ Services
@@ -74,7 +74,7 @@ This main repository contains the Docker Compose configuration to run the entire
    ```
 
 4. **Access the applications:**
-   - 🖥️ **Web Frontend**: http://localhost:3002
+   - 🖥️ **Desktop Frontend**: http://localhost:3002
    - 📱 **Mobile Frontend**: http://localhost:3001
    - 🌐 **API Gateway**: http://localhost:8000
 
