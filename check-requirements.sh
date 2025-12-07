@@ -99,7 +99,7 @@ echo ""
 # Check ports
 echo -e "${BLUE}[4/7] Port Availability${NC}"
 PORTS=(3001 3002 8000 9000)
-PORT_NAMES=("Mobile Frontend" "Web Frontend" "API Gateway" "Reverse Proxy")
+PORT_NAMES=("Mobile Frontend" "Desktop Frontend" "API Gateway" "Reverse Proxy")
 
 for i in "${!PORTS[@]}"; do
     PORT=${PORTS[$i]}
