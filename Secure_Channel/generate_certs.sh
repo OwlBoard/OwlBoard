@@ -9,6 +9,10 @@
 # - Load Balancer certificates
 # - Backend service certificates (User, Chat, Auth, Comments, Canvas)
 #
+# Note: Certificates include localhost and 127.0.0.1 in Subject Alternative Names
+# for development/testing. For production, regenerate without these or use 
+# certificates from a trusted CA.
+#
 # Usage: ./generate_certs.sh
 ################################################################################
 

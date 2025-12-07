@@ -40,4 +40,14 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+# Create settings instance
 settings = Settings()
+
+# Warn if using default JWT secret key
+if settings.JWT_SECRET_KEY == "your-super-secret-jwt-key-change-this-in-production":
+    import warnings
+    warnings.warn(
+        "WARNING: Using default JWT_SECRET_KEY. This is insecure for production. "
+        "Set JWT_SECRET_KEY environment variable to a secure random value.",
+        UserWarning
+    )

@@ -159,7 +159,14 @@ async def refresh_token(
     
     # Verify refresh token exists in Redis
     stored_token = redis_client.get(f"refresh_token:{user_id}")
-    if not stored_token or stored_token != request.refresh_token:
+    if not stored_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found or invalid"
+        )
+    
+    # Ensure type consistency for comparison
+    if str(stored_token) != str(request.refresh_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token not found or invalid"
