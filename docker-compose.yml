@@ -1,6 +1,6 @@
 services:
 
-  # Desktop Proxy - Routes external traffic to Desktop Frontend on private network
+  # Desktop Proxy - Routes external traffic to Web Frontend on private network
   desktop_proxy:
     build:
       context: ./Reverse_Proxy
@@ -8,7 +8,7 @@ services:
     container_name: desktop_proxy
     restart: unless-stopped
     ports:
-      - "8000:80"   # Desktop frontend external access (public network)
+      - "8000:80"   # Web frontend external access (public network)
     depends_on:
       - nextjs_frontend
     volumes:
@@ -426,7 +426,7 @@ services:
 
   nextjs_frontend:
       build:
-        context: ./Desktop_Front_End
+        context: ./Web_Front_End
         dockerfile: Dockerfile
         cache_from:
           - nextjs_frontend:latest

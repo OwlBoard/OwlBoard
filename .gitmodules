@@ -4,9 +4,9 @@
 [submodule "Comments_Service"]
 	path = Comments_Service
 	url = https://github.com/OwlBoard/Comments_Service.git
-[submodule "Desktop_Front_End"]
-	path = Desktop_Front_End
-	url = https://github.com/OwlBoard/Desktop_Front_End.git
+[submodule "Web_Front_End"]
+	path = Web_Front_End
+	url = https://github.com/OwlBoard/Web_Front_End.git
 [submodule "Mobile_Front_End"]
 	path = Mobile_Front_End
 	url = https://github.com/OwlBoard/Mobile_Front_End.git
